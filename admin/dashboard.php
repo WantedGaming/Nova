@@ -1,509 +1,227 @@
 <?php
-// Start the session
-session_start();
+require_once '../config/database.php';
 
-// Check if user is logged in and is an admin
-if (!isset($_SESSION['user_login']) || !isset($_SESSION['access_level']) || $_SESSION['access_level'] != 1) {
-    // Redirect to login page
-    $_SESSION['login_error'] = "You must be logged in as an administrator to access this page.";
-    header("Location: index.php");
+// Check if user is logged in and has admin access
+if (!isset($_SESSION['user_id']) || $_SESSION['access_level'] < 1) {
+    header('Location: /');
     exit;
 }
 
-// Get the username from the session
-$username = $_SESSION['user_login'];
+$pageTitle = 'Admin Dashboard';
 
-// Database connection (you'll need to replace these with your actual database credentials)
-$host = 'localhost';
-$dbname = 'nova_db';
-$dbuser = 'root';
-$dbpass = '';
-
+// Get database statistics
 try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname", $dbuser, $dbpass);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    
-    // Count total users
-    $stmt = $pdo->query("SELECT COUNT(*) FROM accounts");
-    $totalUsers = $stmt->fetchColumn();
-    
-    // Count admin users
-    $stmt = $pdo->query("SELECT COUNT(*) FROM accounts WHERE access_level = 1");
-    $adminUsers = $stmt->fetchColumn();
-    
-    // Get some recent accounts
-    $stmt = $pdo->query("SELECT login, lastactive, access_level, ip FROM accounts ORDER BY lastactive DESC LIMIT 5");
-    $recentAccounts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    
-} catch (PDOException $e) {
-    // Handle database connection error
-    $dbError = "Database connection failed: " . $e->getMessage();
-    $totalUsers = 0;
-    $adminUsers = 0;
-    $recentAccounts = [];
-}
-?>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NOVA | Admin Dashboard</title>
-    <link rel="stylesheet" href="css/admin.css">
-    <!-- Include Chart.js from CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.1/chart.min.js"></script>
-</head>
-<body>
-    <!-- Sidebar -->
-    <aside class="sidebar">
-        <div class="sidebar-header">
-            <a href="index.php" class="logo">NOVA<span>.</span></a>
-            <a href="index.php" class="back-to-site">
-                <i class="icon">🏠</i> Back to Site
-            </a>
-        </div>
-        
-        <nav class="sidebar-nav">
-            <div class="nav-section">
-                <div class="nav-section-title">MAIN</div>
-                <div class="nav-item active">
-                    <i class="icon">📊</i>
-                    <span class="nav-item-title">Dashboard</span>
-                </div>
-                <div class="nav-item">
-                    <i class="icon">👥</i>
-                    <span class="nav-item-title">Accounts</span>
-                </div>
-                <div class="nav-item">
-                    <i class="icon">🛡️</i>
-                    <span class="nav-item-title">Admin Access</span>
-                </div>
-                <div class="nav-item">
-                    <i class="icon">📜</i>
-                    <span class="nav-item-title">Logs</span>
-                </div>
-            </div>
-            
-            <div class="nav-section">
-                <div class="nav-section-title">MANAGEMENT</div>
-                <div class="nav-item">
-                    <i class="icon">🛒</i>
-                    <span class="nav-item-title">Shop Items</span>
-                </div>
-                <div class="nav-item">
-                    <i class="icon">💰</i>
-                    <span class="nav-item-title">Transactions</span>
-                </div>
-                <div class="nav-item">
-                    <i class="icon">🎮</i>
-                    <span class="nav-item-title">Game Settings</span>
-                </div>
-            </div>
-            
-            <div class="nav-section">
-                <div class="nav-section-title">SETTINGS</div>
-                <div class="nav-item">
-                    <i class="icon">⚙️</i>
-                    <span class="nav-item-title">System Settings</span>
-                </div>
-                <div class="nav-item">
-                    <i class="icon">🔒</i>
-                    <span class="nav-item-title">Security</span>
-                </div>
-                <div class="nav-item">
-                    <i class="icon">📋</i>
-                    <span class="nav-item-title">Backup</span>
-                </div>
-            </div>
-        </nav>
-        
-        <div class="user-profile">
-            <div class="user-avatar"><?php echo strtoupper(substr($username, 0, 2)); ?></div>
-            <div class="user-info">
-                <span class="user-name"><?php echo htmlspecialchars($username); ?></span>
-                <span class="user-role">Administrator</span>
-            </div>
-            <a href="index.php?logout=1" class="logout-button">
-                <i class="icon">↪️</i>
-            </a>
-        </div>
-    </aside>
-    
-    <!-- Main Content -->
-    <main class="main-content">
-        <div class="mobile-header">
-            <button class="mobile-toggle" id="toggleSidebar">
-                <i class="icon">☰</i>
-            </button>
-        </div>
-        
-        <div class="content-header">
-            <h1 class="page-title">Dashboard</h1>
-            
-            <div class="header-actions">
-                <div class="search-box">
-                    <i class="icon search-icon">🔍</i>
-                    <input type="text" class="search-input" placeholder="Search...">
-                </div>
-                
-                <button class="notification-bell">
-                    <i class="icon">🔔</i>
-                    <span class="notification-indicator"></span>
-                </button>
-            </div>
-        </div>
-        
-        <?php if (isset($dbError)): ?>
-        <div class="alert alert-error" style="display: block;">
-            <i class="alert-icon">⚠️</i>
-            <div class="alert-message"><?php echo htmlspecialchars($dbError); ?></div>
-        </div>
-        <?php endif; ?>
-        
-        <div class="dashboard-grid">
-            <div class="stat-card">
-                <div class="stat-header">
-                    <span class="stat-title">Total Accounts</span>
-                    <div class="stat-icon users">👥</div>
-                </div>
-                <div class="stat-value"><?php echo number_format($totalUsers); ?></div>
-                <div class="stat-change positive">
-                    <i class="icon">↗️</i> Active platform
-                </div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="stat-header">
-                    <span class="stat-title">Admin Accounts</span>
-                    <div class="stat-icon revenue">🛡️</div>
-                </div>
-                <div class="stat-value"><?php echo number_format($adminUsers); ?></div>
-                <div class="stat-change positive">
-                    <i class="icon">↗️</i> Protected access
-                </div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="stat-header">
-                    <span class="stat-title">Active Sessions</span>
-                    <div class="stat-icon orders">🔄</div>
-                </div>
-                <div class="stat-value">127</div>
-                <div class="stat-change positive">
-                    <i class="icon">↗️</i> 12.3% since yesterday
-                </div>
-            </div>
-            
-            <div class="stat-card">
-                <div class="stat-header">
-                    <span class="stat-title">System Status</span>
-                    <div class="stat-icon traffic">🟢</div>
-                </div>
-                <div class="stat-value">Online</div>
-                <div class="stat-change positive">
-                    <i class="icon">↗️</i> All systems operational
-                </div>
-            </div>
-        </div>
-        
-        <div class="charts-row">
-            <div class="chart-card">
-                <div class="chart-header">
-                    <h2 class="chart-title">Account Activity</h2>
-                    <div class="chart-filters">
-                        <button class="chart-filter" data-period="day">Day</button>
-                        <button class="chart-filter" data-period="week">Week</button>
-                        <button class="chart-filter active" data-period="month">Month</button>
-                        <button class="chart-filter" data-period="year">Year</button>
-                    </div>
-                </div>
-                <div class="chart-container">
-                    <canvas id="activityChart"></canvas>
-                </div>
-            </div>
-            
-            <div class="chart-card">
-                <div class="chart-header">
-                    <h2 class="chart-title">Access Level Distribution</h2>
-                </div>
-                <div class="chart-container">
-                    <canvas id="accessLevelChart"></canvas>
-                </div>
-            </div>
-        </div>
-        
-        <div class="accounts-section">
-            <div class="accounts-header">
-                <h2 class="accounts-title">Recent Accounts</h2>
-                <button class="add-account-btn" id="openAddAccountModal">
-                    <i class="icon">➕</i> Add Account
-                </button>
-            </div>
-            
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th>Username</th>
-                        <th>Last Active</th>
-                        <th>Access Level</th>
-                        <th>IP Address</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($recentAccounts as $account): ?>
-                    <tr>
-                        <td><?php echo htmlspecialchars($account['login']); ?></td>
-                        <td><?php echo $account['lastactive'] ? date('M d, Y H:i', strtotime($account['lastactive'])) : 'Never'; ?></td>
-                        <td><?php echo $account['access_level'] == 1 ? 'Admin' : 'User'; ?></td>
-                        <td><?php echo htmlspecialchars($account['ip']); ?></td>
-                        <td>
-                            <div class="table-actions">
-                                <button class="action-btn" title="View Details">👁️</button>
-                                <button class="action-btn" title="Edit Account">✏️</button>
-                                <button class="action-btn" title="Delete Account">🗑️</button>
-                            </div>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                    
-                    <?php if (empty($recentAccounts)): ?>
-                    <tr>
-                        <td colspan="5" style="text-align: center;">No accounts found</td>
-                    </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-    </main>
-    
-    <!-- Add Account Modal -->
-    <div class="modal-overlay" id="addAccountModal">
-        <div class="modal">
-            <div class="modal-header">
-                <h3 class="modal-title">Add New Account</h3>
-                <button class="close-modal" id="closeAddAccountModal">&times;</button>
-            </div>
-            <div class="modal-body">
-                <form id="addAccountForm" action="account_actions.php" method="post">
-                    <input type="hidden" name="action" value="add">
-                    
-                    <div class="form-group">
-                        <label class="form-label">Username</label>
-                        <input type="text" name="login" class="form-input" placeholder="Enter username" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Password</label>
-                        <input type="password" name="password" class="form-input" placeholder="Enter password" required>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Access Level</label>
-                        <select name="access_level" class="form-select">
-                            <option value="0">Regular User</option>
-                            <option value="1">Administrator</option>
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Character Slots</label>
-                        <input type="number" name="charslot" class="form-input" value="6" min="1" max="10">
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-cancel" id="cancelAddAccount">Cancel</button>
-                <button class="btn btn-primary" id="submitAddAccount">Add Account</button>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Success Alert -->
-    <div class="alert alert-success" id="successAlert" style="display: none;">
-        <i class="alert-icon">✓</i>
-        <div class="alert-message">Operation completed successfully!</div>
-        <button class="alert-close" id="closeSuccessAlert">&times;</button>
-    </div>
-    
-    <!-- Error Alert -->
-    <div class="alert alert-error" id="errorAlert" style="display: none;">
-        <i class="alert-icon">⚠️</i>
-        <div class="alert-message" id="errorMessage">An error occurred!</div>
-        <button class="alert-close" id="closeErrorAlert">&times;</button>
-    </div>
+    $stats = [
+        'weapons' => $pdo->query("SELECT COUNT(*) FROM weapon")->fetchColumn(),
+        'armor' => $pdo->query("SELECT COUNT(*) FROM armor")->fetchColumn(),
+        'items' => $pdo->query("SELECT COUNT(*) FROM etcitem")->fetchColumn(),
+        'npcs' => $pdo->query("SELECT COUNT(*) FROM npc")->fetchColumn(),
+        'accounts' => $pdo->query("SELECT COUNT(*) FROM accounts")->fetchColumn(),
+        'characters' => $pdo->query("SELECT COUNT(*) FROM characters")->fetchColumn(),
+        'online_characters' => $pdo->query("SELECT COUNT(*) FROM characters WHERE OnlineStatus = 1")->fetchColumn(),
+    ];
 
-    <script>
-        // Toggle sidebar on mobile
-        const toggleSidebar = document.getElementById('toggleSidebar');
-        const sidebar = document.querySelector('.sidebar');
-        
-        if (toggleSidebar) {
-            toggleSidebar.addEventListener('click', () => {
-                sidebar.classList.toggle('active');
-            });
-        }
-        
-        // Add Account Modal
-        const openAddAccountModal = document.getElementById('openAddAccountModal');
-        const addAccountModal = document.getElementById('addAccountModal');
-        const closeAddAccountModal = document.getElementById('closeAddAccountModal');
-        const cancelAddAccount = document.getElementById('cancelAddAccount');
-        const submitAddAccount = document.getElementById('submitAddAccount');
-        const addAccountForm = document.getElementById('addAccountForm');
-        
-        if (openAddAccountModal) {
-            openAddAccountModal.addEventListener('click', () => {
-                addAccountModal.classList.add('active');
-            });
-        }
-        
-        if (closeAddAccountModal) {
-            closeAddAccountModal.addEventListener('click', () => {
-                addAccountModal.classList.remove('active');
-            });
-        }
-        
-        if (cancelAddAccount) {
-            cancelAddAccount.addEventListener('click', () => {
-                addAccountModal.classList.remove('active');
-            });
-        }
-        
-        if (submitAddAccount && addAccountForm) {
-            submitAddAccount.addEventListener('click', () => {
-                addAccountForm.submit();
-            });
-        }
-        
-        // Close modal when clicking outside
-        if (addAccountModal) {
-            addAccountModal.addEventListener('click', (e) => {
-                if (e.target === addAccountModal) {
-                    addAccountModal.classList.remove('active');
-                }
-            });
-        }
-        
-        // Close alerts
-        const closeSuccessAlert = document.getElementById('closeSuccessAlert');
-        const closeErrorAlert = document.getElementById('closeErrorAlert');
-        const successAlert = document.getElementById('successAlert');
-        const errorAlert = document.getElementById('errorAlert');
-        
-        if (closeSuccessAlert && successAlert) {
-            closeSuccessAlert.addEventListener('click', () => {
-                successAlert.style.display = 'none';
-            });
-        }
-        
-        if (closeErrorAlert && errorAlert) {
-            closeErrorAlert.addEventListener('click', () => {
-                errorAlert.style.display = 'none';
-            });
-        }
-        
-        // Charts
-        // Activity Chart
-        const activityChartCtx = document.getElementById('activityChart');
-        if (activityChartCtx) {
-            const activityChart = new Chart(activityChartCtx, {
-                type: 'line',
-                data: {
-                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-                    datasets: [{
-                        label: 'Login Activity',
-                        data: [65, 78, 90, 85, 92, 110, 120, 130, 125, 140, 155, 165],
-                        borderColor: '#f94b1f',
-                        backgroundColor: 'rgba(249, 75, 31, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }, {
-                        label: 'New Accounts',
-                        data: [30, 40, 35, 45, 50, 55, 60, 65, 70, 75, 80, 85],
-                        borderColor: '#17a2b8',
-                        backgroundColor: 'rgba(23, 162, 184, 0.1)',
-                        tension: 0.4,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                            labels: {
-                                color: '#ffffff'
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.05)'
-                            },
-                            ticks: {
-                                color: '#ffffff'
-                            }
-                        },
-                        y: {
-                            grid: {
-                                color: 'rgba(255, 255, 255, 0.05)'
-                            },
-                            ticks: {
-                                color: '#ffffff'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Access Level Chart
-        const accessLevelChartCtx = document.getElementById('accessLevelChart');
-        if (accessLevelChartCtx) {
-            const accessLevelChart = new Chart(accessLevelChartCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Regular Users', 'Administrators'],
-                    datasets: [{
-                        data: [<?php echo $totalUsers - $adminUsers; ?>, <?php echo $adminUsers; ?>],
-                        backgroundColor: ['#17a2b8', '#f94b1f'],
-                        borderColor: ['#17a2b8', '#f94b1f'],
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                color: '#ffffff'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        
-        // Chart filters
-        const chartFilters = document.querySelectorAll('.chart-filter');
-        chartFilters.forEach(filter => {
-            filter.addEventListener('click', () => {
-                // Remove active class from all filters
-                chartFilters.forEach(f => f.classList.remove('active'));
-                // Add active class to clicked filter
-                filter.classList.add('active');
-                
-                // Here you would update the chart data based on the selected period
-                // For now just show an alert
-                // In a real implementation, you would fetch data for the selected period via AJAX
-                console.log('Filter changed to:', filter.dataset.period);
-            });
-        });
-    </script>
-</body>
-</html>
+    // Recent activity
+    $recentLogins = $pdo->query("
+        SELECT login, lastactive 
+        FROM accounts 
+        WHERE lastactive IS NOT NULL 
+        ORDER BY lastactive DESC 
+        LIMIT 10
+    ")->fetchAll();
+
+    $topCharacters = $pdo->query("
+        SELECT char_name, level, Class 
+        FROM characters 
+        ORDER BY level DESC 
+        LIMIT 10
+    ")->fetchAll();
+
+} catch (PDOException $e) {
+    $stats = array_fill_keys(['weapons', 'armor', 'items', 'npcs', 'accounts', 'characters', 'online_characters'], 0);
+    $recentLogins = [];
+    $topCharacters = [];
+}
+
+// Class names mapping
+$classNames = [
+    0 => 'Prince',
+    1 => 'Knight', 
+    2 => 'Elf',
+    3 => 'Wizard',
+    4 => 'Dark Elf',
+    5 => 'Dragon Knight',
+    6 => 'Illusionist',
+    7 => 'Warrior',
+    8 => 'Fencer',
+    9 => 'Lancer'
+];
+
+include '../includes/header.php';
+?>
+
+<div style="margin-top: 80px; min-height: calc(100vh - 80px); background-color: var(--background);">
+    <div class="container" style="padding: 40px 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px;">
+            <div>
+                <h1 style="font-size: 2.5rem; font-weight: 800; color: var(--text); margin-bottom: 10px;">
+                    Admin Dashboard
+                </h1>
+                <p style="color: rgba(255, 255, 255, 0.7); font-size: 1.1rem;">
+                    Welcome back, <?php echo htmlspecialchars($_SESSION['username']); ?>
+                </p>
+            </div>
+            <div style="color: var(--accent); font-size: 3rem;">⚙️</div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 40px;">
+            <div class="feature-card" style="text-align: center; padding: 30px;">
+                <div style="font-size: 2rem; margin-bottom: 15px;">⚔️</div>
+                <div style="font-size: 2.5rem; font-weight: 800; color: var(--accent); margin-bottom: 5px;">
+                    <?php echo number_format($stats['weapons']); ?>
+                </div>
+                <div style="color: rgba(255, 255, 255, 0.8);">Weapons</div>
+                <a href="/admin/categories/weapon/admin_weapon_list.php" style="display: inline-block; margin-top: 15px; padding: 8px 16px; background-color: var(--accent); color: var(--text); text-decoration: none; border-radius: 4px; font-size: 0.9rem;">Manage</a>
+            </div>
+
+            <div class="feature-card" style="text-align: center; padding: 30px;">
+                <div style="font-size: 2rem; margin-bottom: 15px;">🛡️</div>
+                <div style="font-size: 2.5rem; font-weight: 800; color: var(--accent); margin-bottom: 5px;">
+                    <?php echo number_format($stats['armor']); ?>
+                </div>
+                <div style="color: rgba(255, 255, 255, 0.8);">Armor Pieces</div>
+                <a href="/admin/categories/armor/admin_armor_list.php" style="display: inline-block; margin-top: 15px; padding: 8px 16px; background-color: var(--accent); color: var(--text); text-decoration: none; border-radius: 4px; font-size: 0.9rem;">Manage</a>
+            </div>
+
+            <div class="feature-card" style="text-align: center; padding: 30px;">
+                <div style="font-size: 2rem; margin-bottom: 15px;">💎</div>
+                <div style="font-size: 2.5rem; font-weight: 800; color: var(--accent); margin-bottom: 5px;">
+                    <?php echo number_format($stats['items']); ?>
+                </div>
+                <div style="color: rgba(255, 255, 255, 0.8);">Items</div>
+                <a href="/admin/items/admin_item_list.php" style="display: inline-block; margin-top: 15px; padding: 8px 16px; background-color: var(--accent); color: var(--text); text-decoration: none; border-radius: 4px; font-size: 0.9rem;">Manage</a>
+            </div>
+
+            <div class="feature-card" style="text-align: center; padding: 30px;">
+                <div style="font-size: 2rem; margin-bottom: 15px;">👹</div>
+                <div style="font-size: 2.5rem; font-weight: 800; color: var(--accent); margin-bottom: 5px;">
+                    <?php echo number_format($stats['npcs']); ?>
+                </div>
+                <div style="color: rgba(255, 255, 255, 0.8);">NPCs</div>
+                <a href="/admin/npcs/admin_npc_list.php" style="display: inline-block; margin-top: 15px; padding: 8px 16px; background-color: var(--accent); color: var(--text); text-decoration: none; border-radius: 4px; font-size: 0.9rem;">Manage</a>
+            </div>
+        </div>
+
+        <!-- Server Statistics -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 40px;">
+            <div class="feature-card" style="text-align: center; padding: 25px;">
+                <div style="font-size: 1.5rem; margin-bottom: 10px;">👥</div>
+                <div style="font-size: 2rem; font-weight: 800; color: var(--accent); margin-bottom: 5px;">
+                    <?php echo number_format($stats['accounts']); ?>
+                </div>
+                <div style="color: rgba(255, 255, 255, 0.8); font-size: 0.9rem;">Total Accounts</div>
+            </div>
+
+            <div class="feature-card" style="text-align: center; padding: 25px;">
+                <div style="font-size: 1.5rem; margin-bottom: 10px;">🧙‍♂️</div>
+                <div style="font-size: 2rem; font-weight: 800; color: var(--accent); margin-bottom: 5px;">
+                    <?php echo number_format($stats['characters']); ?>
+                </div>
+                <div style="color: rgba(255, 255, 255, 0.8); font-size: 0.9rem;">Total Characters</div>
+            </div>
+
+            <div class="feature-card" style="text-align: center; padding: 25px;">
+                <div style="font-size: 1.5rem; margin-bottom: 10px;">🟢</div>
+                <div style="font-size: 2rem; font-weight: 800; color: var(--success); margin-bottom: 5px;">
+                    <?php echo number_format($stats['online_characters']); ?>
+                </div>
+                <div style="color: rgba(255, 255, 255, 0.8); font-size: 0.9rem;">Online Now</div>
+            </div>
+        </div>
+
+        <!-- Recent Activity & Top Characters -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 40px;">
+            <!-- Recent Logins -->
+            <div class="feature-card" style="padding: 30px;">
+                <h3 style="color: var(--text); margin-bottom: 20px; font-size: 1.3rem; font-weight: 600;">Recent Logins</h3>
+                <div style="max-height: 300px; overflow-y: auto;">
+                    <?php if (!empty($recentLogins)): ?>
+                        <?php foreach ($recentLogins as $login): ?>
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                                <div>
+                                    <div style="font-weight: 500; color: var(--text);"><?php echo htmlspecialchars($login['login']); ?></div>
+                                </div>
+                                <div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9rem;">
+                                    <?php echo $login['lastactive'] ? date('M j, H:i', strtotime($login['lastactive'])) : 'Never'; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <p style="color: rgba(255, 255, 255, 0.6); text-align: center; padding: 20px;">No recent login data</p>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <!-- Top Characters -->
+            <div class="feature-card" style="padding: 30px;">
+                <h3 style="color: var(--text); margin-bottom: 20px; font-size: 1.3rem; font-weight: 600;">Top Characters</h3>
+                <div style="max-height: 300px; overflow-y: auto;">
+                    <?php if (!empty($topCharacters)): ?>
+                        <?php foreach ($topCharacters as $index => $char): ?>
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="background-color: var(--accent); color: var(--text); width: 25px; height: 25px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 600;">
+                                        <?php echo $index + 1; ?>
+                                    </div>
+                                    <div>
+                                        <div style="font-weight: 500; color: var(--text);"><?php echo htmlspecialchars($char['char_name']); ?></div>
+                                        <div style="color: rgba(255, 255, 255, 0.6); font-size: 0.9rem;">
+                                            <?php echo $classNames[$char['Class']] ?? 'Unknown'; ?>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div style="color: var(--accent); font-weight: 600;">Lv. <?php echo $char['level']; ?></div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <p style="color: rgba(255, 255, 255, 0.6); text-align: center; padding: 20px;">No character data</p>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="feature-card" style="padding: 30px;">
+            <h3 style="color: var(--text); margin-bottom: 20px; font-size: 1.3rem; font-weight: 600;">Quick Actions</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <a href="/admin/categories/weapon/admin_weapon_list.php" style="display: flex; align-items: center; gap: 10px; padding: 15px; background-color: var(--secondary); color: var(--text); text-decoration: none; border-radius: 6px; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='rgba(249, 75, 31, 0.1)'" onmouseout="this.style.backgroundColor='var(--secondary)'">
+                    <span style="font-size: 1.2rem;">⚔️</span>
+                    <span>Manage Weapons</span>
+                </a>
+                <a href="/admin/categories/armor/admin_armor_list.php" style="display: flex; align-items: center; gap: 10px; padding: 15px; background-color: var(--secondary); color: var(--text); text-decoration: none; border-radius: 6px; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='rgba(249, 75, 31, 0.1)'" onmouseout="this.style.backgroundColor='var(--secondary)'">
+                    <span style="font-size: 1.2rem;">🛡️</span>
+                    <span>Manage Armor</span>
+                </a>
+                <a href="/admin/users.php" style="display: flex; align-items: center; gap: 10px; padding: 15px; background-color: var(--secondary); color: var(--text); text-decoration: none; border-radius: 6px; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='rgba(249, 75, 31, 0.1)'" onmouseout="this.style.backgroundColor='var(--secondary)'">
+                    <span style="font-size: 1.2rem;">👥</span>
+                    <span>User Management</span>
+                </a>
+                <a href="/admin/settings.php" style="display: flex; align-items: center; gap: 10px; padding: 15px; background-color: var(--secondary); color: var(--text); text-decoration: none; border-radius: 6px; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='rgba(249, 75, 31, 0.1)'" onmouseout="this.style.backgroundColor='var(--secondary)'">
+                    <span style="font-size: 1.2rem;">⚙️</span>
+                    <span>Settings</span>
+                </a>
+                <a href="/admin/logs.php" style="display: flex; align-items: center; gap: 10px; padding: 15px; background-color: var(--secondary); color: var(--text); text-decoration: none; border-radius: 6px; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='rgba(249, 75, 31, 0.1)'" onmouseout="this.style.backgroundColor='var(--secondary)'">
+                    <span style="font-size: 1.2rem;">📋</span>
+                    <span>View Logs</span>
+                </a>
+                <a href="/admin/backup.php" style="display: flex; align-items: center; gap: 10px; padding: 15px; background-color: var(--secondary); color: var(--text); text-decoration: none; border-radius: 6px; transition: all 0.3s ease;" onmouseover="this.style.backgroundColor='rgba(249, 75, 31, 0.1)'" onmouseout="this.style.backgroundColor='var(--secondary)'">
+                    <span style="font-size: 1.2rem;">💾</span>
+                    <span>Database Backup</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<?php include '../includes/footer.php'; ?>
