@@ -56,7 +56,7 @@ try {
     echo json_encode([
         'success' => true, 
         'message' => 'Login successful',
-        'redirect' => $_SESSION['access_level'] >= 1 ? '/admin/dashboard.php' : '/'
+        'redirect' => $_SESSION['access_level'] >= 1 ? './admin/dashboard.php' : './'
     ]);
 
 } catch (PDOException $e) {

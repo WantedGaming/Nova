@@ -163,7 +163,11 @@ $username = $isLoggedIn ? $_SESSION['username'] : '';
                 const result = await response.json();
                 
                 if (result.success) {
-                    window.location.reload();
+                    if (result.redirect) {
+                        window.location.href = result.redirect;
+                    } else {
+                        window.location.reload();
+                    }
                 } else {
                     loginError.textContent = result.message;
                     loginError.style.display = 'block';
