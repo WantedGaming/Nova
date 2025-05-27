@@ -13,7 +13,10 @@ $username = $isLoggedIn ? $_SESSION['username'] : '';
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo isset($pageTitle) ? $pageTitle . ' - ' : ''; ?>L1J-R Remastered</title>
-    <link rel="stylesheet" href="assets/css/main.css">
+    <link rel="stylesheet" href="/assets/css/main.css">
+    <?php if (strpos($_SERVER['REQUEST_URI'], '/admin/') !== false): ?>
+    <link rel="stylesheet" href="/assets/css/admin.css">
+    <?php endif; ?>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
@@ -73,7 +76,7 @@ $username = $isLoggedIn ? $_SESSION['username'] : '';
                                 </a>
                                 <?php endif; ?>
                                 <hr class="dropdown-divider">
-                                <a href="/logout.php" class="dropdown-item logout">
+                                <a href="./logout.php" class="dropdown-item logout">
                                     <span>🚪</span> Logout
                                 </a>
                             </div>
